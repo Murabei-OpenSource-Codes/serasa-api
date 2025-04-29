@@ -1,0 +1,231 @@
+"""Serasa Experian Python API."""
+
+import requests
+import os
+import time
+from copy import copy
+from serasa_api.exceptions import (
+    SerasaAPIQueryErrorException,
+    SerasaAPILoginErrorException,
+    SerasaAPIMalformedOutputException,
+)
+
+# Constants
+API_HEADERS = {"Content-Type": "application/json"}
+MAX_TIMEOUT = 60
+
+
+# Serasa API communication class
+class SerasaAPI:
+    """Serasa API wrapper."""
+
+    def __init__(
+        self, username: str, password: str, url: str, proxy: str = None
+    ):
+        """__init__.
+
+        Args:
+            username (str):
+                Basic Auth username.
+            password (str):
+                Basic Auth password.
+            url (str):
+                API URL.
+            proxy (str):
+                Proxy URL.
+        """
+        # Access properties.
+        self.__username = username
+        self.__password = password
+        self.__url = url
+
+        # Token data, revalidated every request.
+        self.__token_data = None
+
+        # Proxy setup.
+        if proxy is None:
+            proxy = os.getenv("SERASA_API_PROXY")
+        self.__proxy = proxy
+
+        # Session and proxy: create a session object and set proxy.
+        self.__session = requests.Session()
+        self.__session.proxies = {"http": self.__proxy, "https": self.__proxy}
+
+    def person_advanced_report(self, cpf: str):
+        """Fetch advanced report 'RELATORIO_AVANCADO_PF' in Serasa API.
+
+        Args:
+            cpf (str):
+                Person CPF.
+
+        Returns:
+            dict:
+                Person advanced report.
+        """
+
+        return self.__person_information_report(cpf, "RELATORIO_AVANCADO_PF")
+
+    # Private methods:
+    def __person_information_report(self, cpf: str, report_name: str):
+        """Queries person information reports in Serasa API.
+
+        Args:
+            cpf (str):
+                Person CPF.
+            report_name (str):
+                Name of report to be fetch.
+
+        Returns:
+            dict:
+                Person reports.
+        """
+        resource = "credit-services/person-information-report/v1/creditreport"
+
+        headers_opt = {
+            "X-Document-Id": cpf,
+        }
+
+        parameters = {"reportName": report_name}
+
+        query_result = self.__query(
+            resource=resource, parameters=parameters, headers_opt=headers_opt
+        )
+
+        if not "reports" in query_result and len(query_result["reports"]) < 1:
+            raise SerasaAPIMalformedOutputException(
+                message="Output should have at least one report",
+                payload=query_result,
+            )
+
+        # return the first report in the list
+        return query_result["reports"][0]
+
+    def __query(self, resource: str, parameters: dict, headers_opt: dict):
+        """Query a resource in Serasa API.
+
+        Args:
+            resource (str):
+                The resource to be reached in Serasa API.
+            parameters (dict):
+                URL query parameters.
+            headers_opt (dict):
+                Additional headers.
+
+        Returns:
+            requests.Response:
+                Query response.
+        """
+        url = self.__make_url(resource)
+        headers = self.__signed_header()
+        if headers_opt:
+            headers.update(headers_opt)
+
+        try:
+            response = self.__session.get(
+                url,
+                params=parameters,
+                headers=headers,
+                timeout=MAX_TIMEOUT,
+            )
+            response.raise_for_status()
+            query_result = response.json()
+
+            return query_result
+        except requests.exceptions.HTTPError as e:
+            response_list = e.response.json()
+            response_error = response_list[0]
+
+            raise SerasaAPIQueryErrorException(
+                message=response_error["message"], payload=response_error
+            )
+
+    def __signed_header(self):
+        """Create a signed header to performs authorized API requests.
+
+        Returns:
+            dict:
+                signed headers.
+        """
+        # Get the authorization token.
+        self.__login()
+
+        # Mount Authorization field
+        token_type = self.__token_data["token_type"]
+        token_value = self.__token_data["access_token"]
+        token = "{} {}".format(token_type, token_value)
+
+        headers = copy(API_HEADERS)
+        headers["Authorization"] = token
+
+        return headers
+
+    def __login(self):
+        """Make a request to login endpoint to authenticate the API access."""
+        resource = "security/iam/v1/client-identities/login"
+
+        # Return if token is alive
+        if self.__token_alive():
+            return
+
+        # Setup access headers & authorization
+        headers = copy(API_HEADERS)
+
+        try:
+            response = self.__session.post(
+                self.__make_url(resource),
+                headers=headers,
+                timeout=MAX_TIMEOUT,
+                auth=(self.__username, self.__password),
+            )
+
+            # Get token data
+            response.raise_for_status()
+            response_json = response.json()
+            treated_response = {
+                "access_token": response_json["accessToken"],
+                "token_type": response_json["tokenType"],
+                "expires_in": response_json["expiresIn"],
+                "scope": response_json["scope"],
+            }
+
+            self.__token_data = treated_response
+        except requests.exceptions.HTTPError as e:
+            response_list = e.response.json()
+            response_error = response_list[0]
+
+            raise SerasaAPILoginErrorException(
+                message=response_error["message"], payload=response_error
+            )
+
+    def __token_alive(self):
+        """Check if token exists and is valid.
+
+        Returns:
+            boolean:
+                true if token is valid, otherwise false.
+        """
+        # Invalid if no token is provided.
+        if self.__token_data is None:
+            return False
+
+        # Check if existent token stills valid.
+        expires_in = self.__token_data["expires_in"]
+        try:
+            timestamp = int(expires_in)
+            now = int(time.time())
+            return timestamp <= now
+        except ValueError:
+            return False
+
+    def __make_url(self, resource: str):
+        """Setup url for requests.
+
+        Args:
+            resource (str):
+                The resource to be reached in Serasa API.
+
+        Returns:
+            str:
+                mounted url.
+        """
+        return "{}/{}".format(self.__url, resource)

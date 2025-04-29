@@ -1,0 +1,6 @@
+# Create a test_parameters.ini with the same keys as this file
+[DEFAULT]
+SERASA_API_URL=serasa_api_url
+SERASA_API_USERNAME=serasa_api_username
+SERASA_API_PASSWORD=serasa_api_password
+CPF_TEST_INPUT=cpf_test_input

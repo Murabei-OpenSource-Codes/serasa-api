@@ -1,27 +1,32 @@
 """Serasa Experian Python API."""
-
 import requests
 import os
 import time
+from typing import Dict, Any
 from copy import copy
 from serasa_api.exceptions import (
     SerasaAPIQueryErrorException,
     SerasaAPILoginErrorException,
-    SerasaAPIMalformedOutputException,
-)
+    SerasaAPIMalformedOutputException)
 
 # Constants
 API_HEADERS = {"Content-Type": "application/json"}
-MAX_TIMEOUT = 60
+MAX_TIMEOUT = int(os.getenv("SERASA_API_MAX_TIMEOUT", 60))
 
 
 # Serasa API communication class
 class SerasaAPI:
     """Serasa API wrapper."""
 
-    def __init__(
-        self, username: str, password: str, url: str, proxy: str = None
-    ):
+    __username: str
+    """Username that will be used to request login token."""
+    __password: str
+    """Password that will be used to request login token."""
+    __url: str
+    """URL that will be used to call Serasa end-points."""
+
+    def __init__(self, username: str, password: str, url: str,
+                 proxy: str = None):
         """__init__.
 
         Args:
@@ -51,7 +56,7 @@ class SerasaAPI:
         self.__session = requests.Session()
         self.__session.proxies = {"http": self.__proxy, "https": self.__proxy}
 
-    def person_advanced_report(self, cpf: str):
+    def person_advanced_report(self, cpf: str) -> dict:
         """Fetch advanced report 'RELATORIO_AVANCADO_PF' in Serasa API.
 
         Args:
@@ -62,11 +67,12 @@ class SerasaAPI:
             dict:
                 Person advanced report.
         """
-
-        return self.__person_information_report(cpf, "RELATORIO_AVANCADO_PF")
+        return self.__person_information_report(
+            cpf=cpf, report_name="RELATORIO_AVANCADO_PF")
 
     # Private methods:
-    def __person_information_report(self, cpf: str, report_name: str):
+    def __person_information_report(self, cpf: str,
+                                    report_name: str) -> dict:
         """Queries person information reports in Serasa API.
 
         Args:
@@ -78,6 +84,10 @@ class SerasaAPI:
         Returns:
             dict:
                 Person reports.
+
+        Raises:
+            SerasaAPIMalformedOutputException:
+                Raise error if the data returned is not valid.
         """
         resource = "credit-services/person-information-report/v1/creditreport"
 
@@ -88,10 +98,10 @@ class SerasaAPI:
         parameters = {"reportName": report_name}
 
         query_result = self.__query(
-            resource=resource, parameters=parameters, headers_opt=headers_opt
-        )
+            resource=resource, parameters=parameters,
+            headers_opt=headers_opt)
 
-        if not "reports" in query_result and len(query_result["reports"]) < 1:
+        if "reports" not in query_result and len(query_result["reports"]) < 1:
             raise SerasaAPIMalformedOutputException(
                 message="Output should have at least one report",
                 payload=query_result,
@@ -122,11 +132,8 @@ class SerasaAPI:
 
         try:
             response = self.__session.get(
-                url,
-                params=parameters,
-                headers=headers,
-                timeout=MAX_TIMEOUT,
-            )
+                url, params=parameters, headers=headers,
+                timeout=MAX_TIMEOUT)
             response.raise_for_status()
             query_result = response.json()
 
@@ -172,11 +179,8 @@ class SerasaAPI:
 
         try:
             response = self.__session.post(
-                self.__make_url(resource),
-                headers=headers,
-                timeout=MAX_TIMEOUT,
-                auth=(self.__username, self.__password),
-            )
+                self.__make_url(resource), headers=headers,
+                timeout=MAX_TIMEOUT, auth=(self.__username, self.__password))
 
             # Get token data
             response.raise_for_status()
@@ -194,8 +198,8 @@ class SerasaAPI:
             response_error = response_list[0]
 
             raise SerasaAPILoginErrorException(
-                message=response_error["message"], payload=response_error
-            )
+                message=response_error["message"],
+                payload=response_error)
 
     def __token_alive(self):
         """Check if token exists and is valid.

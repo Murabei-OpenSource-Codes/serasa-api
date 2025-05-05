@@ -1,29 +1,22 @@
 """Test Neuron Lab API."""
-
-import unittest
-import configparser
 import os
+import unittest
 from serasa_api.data import SerasaAPI
 
-config = configparser.ConfigParser()
-dir_path = os.path.dirname(os.path.realpath(__file__))
-config.read("{}/test_parameters.ini".format(dir_path))
-
-SERASA_API_URL = config["DEFAULT"]["SERASA_API_URL"].strip()
-SERASA_API_USERNAME = config["DEFAULT"]["SERASA_API_USERNAME"].strip()
-SERASA_API_PASSWORD = config["DEFAULT"]["SERASA_API_PASSWORD"].strip()
-CPF_TEST_INPUT = config["DEFAULT"]["CPF_TEST_INPUT"].strip()
+SERASA_API_URL = os.getenv("SERASA_API_URL")
+SERASA_API_USERNAME = os.getenv("SERASA_API_USERNAME")
+SERASA_API_PASSWORD = os.getenv("SERASA_API_PASSWORD")
+CPF_TEST_INPUT = os.getenv("CPF_TEST_INPUT")
 
 
 class TestSerasaAPI(unittest.TestCase):
     """Test Neuron Lab api."""
 
     def test__fetch_advanced_report_pf(self):
+        """Test fetch advanced report pf."""
         serasa_api = SerasaAPI(
-            url=SERASA_API_URL,
-            username=SERASA_API_USERNAME,
-            password=SERASA_API_PASSWORD,
-        )
+            url=SERASA_API_URL, username=SERASA_API_USERNAME,
+            password=SERASA_API_PASSWORD)
 
         reports = serasa_api.person_advanced_report(CPF_TEST_INPUT)
 

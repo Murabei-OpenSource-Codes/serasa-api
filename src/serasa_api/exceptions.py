@@ -1,9 +1,12 @@
+"""Module for custom exceptions at Serasa API."""
+
 class SerasaAPIException(Exception):
     def __init__(self, message: str, payload: dict = {}):
         self.message = message
         self.payload = payload
 
     def __repr__(self):
+        """__repr__."""
         template = "{class_name}: {message}"
         return template.format(
             class_name=self.__class__.__name__, message=self.message

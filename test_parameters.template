@@ -1,0 +1,4 @@
+export SERASA_API_URL=serasa_api_url
+export SERASA_API_USERNAME=serasa_api_username
+export SERASA_API_PASSWORD=serasa_api_password
+export CPF_TEST_INPUT=cpf_test_input

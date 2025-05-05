@@ -217,7 +217,7 @@ class SerasaAPI:
         # Check if existent token stills valid.
         expires_in = self._token_data["expires_in"]
         try:
-            timestamp = int(expires_in)
+            timestamp = int(expires_in) - 300
             now = int(time.time())
             return timestamp <= now
         except ValueError:
